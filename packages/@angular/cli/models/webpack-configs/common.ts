@@ -1,12 +1,12 @@
-import * as webpack from 'webpack';
-import * as path from 'path';
 import * as CopyWebpackPlugin from 'copy-webpack-plugin';
-import { NamedLazyChunksWebpackPlugin } from '../../plugins/named-lazy-chunks-webpack-plugin';
+import * as path from 'path';
+import * as webpack from 'webpack';
 import { InsertConcatAssetsWebpackPlugin } from '../../plugins/insert-concat-assets-webpack-plugin';
-import { extraEntryParser, getOutputHashFormat, AssetPattern } from './utils';
+import { NamedLazyChunksWebpackPlugin } from '../../plugins/named-lazy-chunks-webpack-plugin';
 import { isDirectory } from '../../utilities/is-directory';
 import { requireProjectModule } from '../../utilities/require-project-module';
 import { WebpackConfigOptions } from '../webpack-config';
+import { AssetPattern, extraEntryParser, getOutputHashFormat } from './utils';
 
 const ConcatPlugin = require('webpack-concat-plugin');
 const ProgressPlugin = require('webpack/lib/ProgressPlugin');
@@ -19,13 +19,15 @@ const SilentError = require('silent-error');
  *
  * require('source-map-loader')
  * require('raw-loader')
+ * require('html-loader')
+ * require('markup-inline-loader')
  * require('url-loader')
  * require('file-loader')
  * require('@angular-devkit/build-optimizer')
  */
 
 export function getCommonConfig(wco: WebpackConfigOptions) {
-  const { projectRoot, buildOptions, appConfig } = wco;
+  const {projectRoot, buildOptions, appConfig} = wco;
 
   const appRoot = path.resolve(projectRoot, appConfig.root);
   const nodeModules = path.resolve(projectRoot, 'node_modules');
@@ -57,7 +59,7 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
           // All entries have to be lazy for the bundle to be lazy.
           existingEntry.lazy = existingEntry.lazy && curr.lazy;
         } else {
-          prev.push({ entry: curr.entry, paths: [curr.path], lazy: curr.lazy });
+          prev.push({entry: curr.entry, paths: [curr.path], lazy: curr.lazy});
         }
         return prev;
       }, []);
@@ -67,12 +69,12 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
     globalScriptsByEntry.forEach((script) => {
       const hash = hashFormat.chunk !== '' && !script.lazy ? '.[hash]' : '';
       extraPlugins.push(new ConcatPlugin({
-        uglify: buildOptions.target === 'production' ? { sourceMapIncludeSources: true } : false,
+        uglify: buildOptions.target === 'production' ? {sourceMapIncludeSources: true} : false,
         sourceMap: buildOptions.sourcemaps,
         name: script.entry,
         // Lazy scripts don't get a hash, otherwise they can't be loaded by name.
         fileName: `[name]${script.lazy ? '' : hash}.bundle.js`,
-        filesToConcat: script.paths
+        filesToConcat: script.paths,
       }));
     });
 
@@ -80,7 +82,7 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
     extraPlugins.push(new InsertConcatAssetsWebpackPlugin(
       globalScriptsByEntry
         .filter((el) => !el.lazy)
-        .map((el) => el.entry)
+        .map((el) => el.entry),
     ));
   }
 
@@ -88,7 +90,7 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
   if (appConfig.assets) {
     const copyWebpackPluginPatterns = appConfig.assets.map((asset: string | AssetPattern) => {
       // Convert all string assets to object notation.
-      asset = typeof asset === 'string' ? { glob: asset } : asset;
+      asset = typeof asset === 'string' ? {glob: asset} : asset;
       // Add defaults.
       // Input is always resolved relative to the appRoot.
       asset.input = path.resolve(appRoot, asset.input || '');
@@ -117,11 +119,11 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
         to: asset.output,
         from: {
           glob: asset.glob,
-          dot: true
-        }
+          dot: true,
+        },
       };
     });
-    const copyWebpackPluginOptions = { ignore: ['.gitkeep'] };
+    const copyWebpackPluginOptions = {ignore: ['.gitkeep']};
 
     const copyWebpackPluginInstance = new CopyWebpackPlugin(copyWebpackPluginPatterns,
       copyWebpackPluginOptions);
@@ -134,12 +136,12 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
   }
 
   if (buildOptions.progress) {
-    extraPlugins.push(new ProgressPlugin({ profile: buildOptions.verbose, colors: true }));
+    extraPlugins.push(new ProgressPlugin({profile: buildOptions.verbose, colors: true}));
   }
 
   if (buildOptions.showCircularDependencies) {
     extraPlugins.push(new CircularDependencyPlugin({
-      exclude: /(\\|\/)node_modules(\\|\/)/
+      exclude: /(\\|\/)node_modules(\\|\/)/,
     }));
   }
 
@@ -148,8 +150,8 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
       test: /\.js$/,
       use: [{
         loader: '@angular-devkit/build-optimizer/webpack-loader',
-        options: { sourceMap: buildOptions.sourcemaps }
-      }]
+        options: {sourceMap: buildOptions.sourcemaps},
+      }],
     });
   }
 
@@ -166,17 +168,18 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
     const rxjsPathMappingImport = 'rxjs/_esm5/path-mapping';
     const rxPaths = requireProjectModule(projectRoot, rxjsPathMappingImport);
     alias = rxPaths(nodeModules);
-  } catch (e) { }
+  } catch (e) {
+  }
 
   return {
     resolve: {
       extensions: ['.ts', '.js'],
       modules: ['node_modules', nodeModules],
       symlinks: !buildOptions.preserveSymlinks,
-      alias
+      alias,
     },
     resolveLoader: {
-      modules: [nodeModules, 'node_modules']
+      modules: [nodeModules, 'node_modules'],
     },
     context: __dirname,
     entry: entryPoints,
@@ -184,31 +187,32 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
       path: path.resolve(buildOptions.outputPath),
       publicPath: buildOptions.deployUrl,
       filename: `[name]${hashFormat.chunk}.bundle.js`,
-      chunkFilename: `[id]${hashFormat.chunk}.chunk.js`
+      chunkFilename: `[id]${hashFormat.chunk}.chunk.js`,
     },
     module: {
       rules: [
-        { test: /\.html$/, loader: 'raw-loader' },
+        {test: /\.html$/, loaders: ['html-loader', 'markup-inline-loader']},
+        {test: /\.md$/, loaders: ['html-loader', 'markup-inline-loader', 'markdown-loader']},
         {
           test: /\.(eot|svg|cur)$/,
           loader: 'file-loader',
           options: {
             name: `[name]${hashFormat.file}.[ext]`,
-            limit: 10000
-          }
+            limit: 10000,
+          },
         },
         {
           test: /\.(jpg|png|webp|gif|otf|ttf|woff|woff2|ani)$/,
           loader: 'url-loader',
           options: {
             name: `[name]${hashFormat.file}.[ext]`,
-            limit: 10000
-          }
-        }
-      ].concat(extraRules)
+            limit: 10000,
+          },
+        },
+      ].concat(extraRules),
     },
     plugins: [
-      new webpack.NoEmitOnErrorsPlugin()
-    ].concat(extraPlugins)
+      new webpack.NoEmitOnErrorsPlugin(),
+    ].concat(extraPlugins),
   };
 }
