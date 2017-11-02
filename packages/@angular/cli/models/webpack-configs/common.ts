@@ -19,6 +19,7 @@ const SilentError = require('silent-error');
  *
  * require('source-map-loader')
  * require('html-loader')
+ * require('markup-inline-loader')
  * require('url-loader')
  * require('file-loader')
  * require('@angular-devkit/build-optimizer')
@@ -199,10 +200,15 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
       rules: [
         {
           test: /\.html$/,
-          loader: 'html-loader',
-          options: {
-            root: appRoot,
-          }
+          loaders: [
+            {
+              loader: 'html-loader',
+              options: {
+                root: appRoot,
+              },
+            },
+            'markup-inline-loader',
+          ],
         },
         {
           test: /\.(eot|svg|cur)$/,
